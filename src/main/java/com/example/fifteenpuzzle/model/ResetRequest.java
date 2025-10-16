@@ -7,7 +7,7 @@ public class ResetRequest {
 
     @Min(value = 3, message = "Size must be at least 3")
     @Max(value = 5, message = "Size must be at most 5")
-    private int size = 4; // default
+    private int size = 4;
 
     public int getSize() {
         return size;

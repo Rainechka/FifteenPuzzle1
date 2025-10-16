@@ -11,10 +11,10 @@
             flex-direction: column;
             align-items: center;
             padding: 20px;
-            background-color: #f5f5f5;
+            background-color: #f9f9f9;
         }
         h1 {
-            color: #333;
+            color: #2c3e50;
         }
         .controls {
             margin: 15px 0;
@@ -26,6 +26,12 @@
             padding: 8px 16px;
             font-size: 16px;
             cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+        }
+        button:hover {
+            background: #fa423c; /* твой цвет */
         }
         .board {
             display: grid;
@@ -45,10 +51,6 @@
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            transition: transform 0.2s;
-        }
-        .tile:hover {
-            transform: scale(1.05);
         }
         .tile.empty {
             background-color: #e0e0e0;
@@ -62,6 +64,16 @@
         }
         .win {
             color: #388e3c;
+        }
+        #leaderboard h2, #leaderboard h3 {
+            text-align: center;
+        }
+        #leaderboard ol {
+            padding-left: 20px;
+            max-width: 300px;
+        }
+        #leaderboard li {
+            margin-bottom: 5px;
         }
     </style>
 </head>
@@ -78,8 +90,13 @@
     <button id="resetBtn">Сбросить игру</button>
 </div>
 
+<div id="timer">Время: 0 сек</div>
 <div id="board" class="board"></div>
 <div id="message" class="message"></div>
+
+<div id="leaderboard">
+    <p>Загрузка рекордов...</p>
+</div>
 
 <script>
     const API_BASE = '/game/default';
@@ -87,76 +104,47 @@
     const messageEl = document.getElementById('message');
     const sizeSelect = document.getElementById('size');
     const resetBtn = document.getElementById('resetBtn');
-    const timerEl = document.createElement('div');
-    timerEl.id = 'timer';
-    timerEl.style.marginTop = '10px';
-    timerEl.style.fontSize = '18px';
-    timerEl.style.fontWeight = 'bold';
-    document.body.insertBefore(timerEl, boardContainer);
+    const timerEl = document.getElementById('timer');
+    const leaderboardEl = document.getElementById('leaderboard');
 
-    let gameTime = 0;
+    let clientTimer = 0;
     let timerInterval = null;
+    let gameFinished = false;
+    let gameStarted = false;
 
-    function updateTimer(time) {
-        gameTime = time;
-        timerEl.textContent = `Время: ${time} сек`;
+    resetBtn.addEventListener('click', resetGame);
+    loadInitialData();
+
+    function loadInitialData() {
+        loadBoard();
+        loadLeaderboard();
     }
 
-    function startTimer() {
-        if (timerInterval) clearInterval(timerInterval);
+    function updateTimerDisplay(seconds) {
+        timerEl.textContent = `Время: ${seconds} сек`;
+    }
+
+    function startClientTimer() {
+        if (timerInterval) return;
+        clientTimer = 0;
+        updateTimerDisplay(clientTimer);
         timerInterval = setInterval(() => {
-            updateTimer(++gameTime);
+            clientTimer++;
+            updateTimerDisplay(clientTimer);
         }, 1000);
     }
 
-    // Загрузка рекордов
-    async function loadLeaderboard() {
-        try {
-            const response = await fetch('/leaderboard');
-            const records = await response.json();
-            displayLeaderboard(records);
-        } catch (e) {
-            console.warn('Не удалось загрузить рекорды');
+    function stopClientTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
         }
     }
 
-    function displayLeaderboard(records) {
-        const existing = document.getElementById('leaderboard');
-        if (existing) existing.remove();
-
-        const lbDiv = document.createElement('div');
-        lbDiv.id = 'leaderboard';
-        lbDiv.innerHTML = '<h2>🏆 Таблица рекордов</h2>';
-
-        [3,4,5].forEach(size => {
-            const sizeRecords = records.filter(r => r.size === size).slice(0,5);
-            if (sizeRecords.length > 0) {
-                const h3 = document.createElement('h3');
-                h3.textContent = `${size}×${size}`;
-                lbDiv.appendChild(h3);
-                const ul = document.createElement('ul');
-                ul.style.listStyle = 'none';
-                ul.style.padding = '0';
-                sizeRecords.forEach((r, i) => {
-                    const li = document.createElement('li');
-                    li.textContent = `${i+1}. ${r.playerName} — ${r.timeSeconds} сек`;
-                    ul.appendChild(li);
-                });
-                lbDiv.appendChild(ul);
-            }
-        });
-
-        document.body.appendChild(lbDiv);
-    }
-
-    // Инициализация
-    resetBtn.addEventListener('click', resetGame);
-    loadBoard();
-    loadLeaderboard();
-
     async function resetGame() {
-        clearInterval(timerInterval);
-        timerInterval = null;
+        stopClientTimer();
+        gameStarted = false;
+        gameFinished = false;
         const size = parseInt(sizeSelect.value);
         try {
             const response = await fetch(`${API_BASE}/reset`, {
@@ -166,25 +154,38 @@
             });
             if (response.ok) {
                 messageEl.textContent = '';
-                messageEl.className = 'message';
-                updateTimer(0);
-                startTimer(); // таймер идёт сразу после сброса
+                updateTimerDisplay(0);
                 loadBoard();
             }
         } catch (err) {
-            messageEl.textContent = 'Ошибка сброса';
+            messageEl.textContent = 'Ошибка сброса игры';
         }
     }
 
     async function loadBoard() {
         try {
             const response = await fetch(`${API_BASE}/board`);
+            if (!response.ok) throw new Error('HTTP ' + response.status);
             const data = await response.json();
             renderBoard(data.board, data.size);
-            updateTimer(data.timeSeconds || 0);
-            if (data.timeSeconds > 0) startTimer();
+
+            if (data.timeSeconds > 0 && !gameFinished) {
+                gameStarted = true;
+                clientTimer = data.timeSeconds;
+                updateTimerDisplay(clientTimer);
+                if (!timerInterval) {
+                    stopClientTimer();
+                    timerInterval = setInterval(() => {
+                        clientTimer++;
+                        updateTimerDisplay(clientTimer);
+                    }, 1000);
+                }
+            } else {
+                updateTimerDisplay(0);
+            }
         } catch (err) {
-            messageEl.textContent = 'Ошибка загрузки';
+            console.error('Ошибка загрузки доски:', err);
+            messageEl.textContent = 'Не удалось загрузить доску';
         }
     }
 
@@ -193,11 +194,11 @@
         boardContainer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
         boardContainer.style.width = `${Math.min(400, 64 * size)}px`;
 
-        flatBoard.forEach((value, index) => {
+        flatBoard.forEach(value => {
             const button = document.createElement('button');
             button.className = value === 0 ? 'tile empty' : 'tile';
             button.textContent = value === 0 ? '' : value;
-            if (value !== 0) {
+            if (value !== 0 && !gameFinished) {
                 button.addEventListener('click', () => moveTile(value));
             }
             boardContainer.appendChild(button);
@@ -205,27 +206,75 @@
     }
 
     async function moveTile(tileId) {
+        if (gameFinished) return;
+
+        if (!gameStarted) {
+            gameStarted = true;
+            startClientTimer();
+        }
+
         try {
             const response = await fetch(`${API_BASE}/move`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tileId })
             });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
             const result = await response.json();
             renderBoard(result.board, result.size);
-            updateTimer(result.timeSeconds);
 
             if (result.solved) {
-                clearInterval(timerInterval);
-                showWinDialog(result.timeSeconds);
+                gameFinished = true;
+                stopClientTimer();
+                showWinDialog(clientTimer);
             } else if (!result.movable) {
-                messageEl.textContent = 'Нельзя переместить!';
-                messageEl.className = 'message';
+                messageEl.textContent = 'Нельзя переместить эту плитку!';
             } else {
                 messageEl.textContent = '';
             }
         } catch (err) {
-            messageEl.textContent = 'Ошибка хода';
+            console.error('Ошибка хода:', err);
+            messageEl.textContent = 'Ошибка при перемещении';
+        }
+    }
+
+    async function loadLeaderboard() {
+        leaderboardEl.innerHTML = '<p>Загрузка рекордов...</p>';
+        try {
+            const response = await fetch('/leaderboard');
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const records = await response.json();
+            console.log('Рекорды с сервера:', records); // для отладки
+
+            if (!Array.isArray(records)) {
+                throw new Error('Некорректный формат рекордов');
+            }
+
+            let html = '<h2>🏆 Таблица рекордов</h2>';
+            [3, 4, 5].forEach(size => {
+                const sizeRecords = records
+                    .filter(r => r.size === size)
+                    .sort((a, b) => a.timeSeconds - b.timeSeconds)
+                    .slice(0, 5);
+
+                if (sizeRecords.length > 0) {
+                    html += `<h3>${size}×${size}</h3><ol>`;
+                    sizeRecords.forEach(r => {
+                        const name = r.playerName || 'Аноним';
+                        html += `<li><strong>${name}</strong> — ${r.timeSeconds} сек</li>`;
+                    });
+                    html += `</ol>`;
+                }
+            });
+
+            if (html === '<h2>🏆 Таблица рекордов</h2>') {
+                html += '<p>Пока нет рекордов</p>';
+            }
+
+            leaderboardEl.innerHTML = html;
+        } catch (e) {
+            console.error('Ошибка загрузки рекордов:', e);
+            leaderboardEl.innerHTML = '<p>Не удалось загрузить рекорды</p>';
         }
     }
 
@@ -249,16 +298,16 @@
         dialog.style.textAlign = 'center';
         dialog.innerHTML = `
             <h2>🎉 Победа!</h2>
-            <p>Время: ${time} секунд</p>
-            <input type="text" id="playerName" placeholder="Ваше имя (до 20 символов)" maxlength="20" />
+            <p>Ваше время: <strong>${time} секунд</strong></p>
+            <input type="text" id="playerName" placeholder="Введите имя (до 20 символов)" maxlength="20" />
             <br><br>
             <button id="saveRecordBtn">Сохранить рекорд</button>
-            <button id="closeWinBtn">Играть снова</button>
+            <button id="playAgainBtn">Играть снова</button>
         `;
         overlay.appendChild(dialog);
         document.body.appendChild(overlay);
 
-        document.getElementById('closeWinBtn').onclick = () => {
+        document.getElementById('playAgainBtn').onclick = () => {
             document.body.removeChild(overlay);
             resetGame();
         };
@@ -266,21 +315,27 @@
         document.getElementById('saveRecordBtn').onclick = async () => {
             const name = document.getElementById('playerName').value.trim();
             if (!name) {
-                alert('Введите имя!');
+                alert('Пожалуйста, введите имя!');
                 return;
             }
             try {
-                await fetch(`${API_BASE}/finish`, {
+                const resp = await fetch(`${API_BASE}/finish`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ playerName: name })
                 });
-                alert('Рекорд сохранён!');
-                document.body.removeChild(overlay);
-                loadLeaderboard();
-                resetGame();
+                if (resp.ok) {
+                    alert('Рекорд успешно сохранён!');
+                    document.body.removeChild(overlay);
+                    loadLeaderboard(); // ✅ обновляем таблицу
+                    resetGame();
+                } else {
+                    const err = await resp.json().catch(() => ({}));
+                    alert('Ошибка: ' + (err.message || 'Не удалось сохранить'));
+                }
             } catch (e) {
-                alert('Ошибка сохранения');
+                console.error('Ошибка сохранения:', e);
+                alert('Ошибка при сохранении рекорда');
             }
         };
     }

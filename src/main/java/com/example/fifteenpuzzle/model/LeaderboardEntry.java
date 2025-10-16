@@ -12,7 +12,6 @@ public class LeaderboardEntry {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "UTC")
     private Instant timestamp;
 
-    // Конструкторы, геттеры, сеттеры
     public LeaderboardEntry() {}
 
     public LeaderboardEntry(String playerName, int size, long timeSeconds) {
@@ -22,7 +21,6 @@ public class LeaderboardEntry {
         this.timestamp = Instant.now();
     }
 
-    // Геттеры и сеттеры
     public String getPlayerName() { return playerName; }
     public void setPlayerName(String playerName) { this.playerName = playerName; }
 

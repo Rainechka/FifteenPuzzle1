@@ -6,14 +6,23 @@ public class GameSession {
     private final int size;
     private Instant startTime;
     private boolean finished = false;
+    private boolean started = false;
 
     public GameSession(int size) {
         this.size = size;
-        this.startTime = Instant.now();
+    }
+
+    public void startIfNotStarted() {
+        if (!started && !finished) {
+            this.startTime = Instant.now();
+            this.started = true;
+        }
     }
 
     public long getElapsedSeconds() {
-        if (finished) return 0;
+        if (!started || finished) {
+            return 0;
+        }
         return java.time.Duration.between(startTime, Instant.now()).toSeconds();
     }
 
@@ -21,6 +30,7 @@ public class GameSession {
         this.finished = true;
     }
 
-    public int getSize() { return size; }
     public boolean isFinished() { return finished; }
+    public int getSize() { return size; }
+    public boolean isStarted() { return started; }
 }

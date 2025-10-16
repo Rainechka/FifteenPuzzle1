@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Max;
 public class MoveRequest {
 
     @Min(value = 1, message = "tileId must be at least 1")
-    @Max(value = 99, message = "tileId must not exceed 99") // будем проверять точнее в сервисе
+    @Max(value = 99, message = "tileId must not exceed 99")
     private int tileId;
 
     public int getTileId() {

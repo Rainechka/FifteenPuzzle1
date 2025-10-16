@@ -1,6 +1,8 @@
 package com.example.fifteenpuzzle.controller;
 
-import com.example.fifteenpuzzle.model.*;
+import com.example.fifteenpuzzle.model.FinishRequest;
+import com.example.fifteenpuzzle.model.MoveRequest;
+import com.example.fifteenpuzzle.model.ResetRequest;
 import com.example.fifteenpuzzle.service.GameService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +27,7 @@ public class GameController {
             @Valid @RequestBody MoveRequest request) {
 
         GameService.MoveResult result = gameService.moveTile(gameId, request.getTileId());
-        long currentTime = gameService.getGameTime(gameId); // ← добавили
+        long currentTime = gameService.getGameTime(gameId);
 
         return ResponseEntity.ok(Map.of(
                 "movable", result.isMovable(),
@@ -55,13 +57,7 @@ public class GameController {
 
         int size = (request != null) ? request.getSize() : 4;
         gameService.resetGame(gameId, size);
-
-        GameBoard board = gameService.getGame(gameId);
-        return ResponseEntity.ok(Map.of(
-                "message", "Game reset",
-                "board", board.getBoardAsFlatArray(),
-                "size", board.getSize()
-        ));
+        return ResponseEntity.ok(Map.of("message", "Game reset"));
     }
 
     @PostMapping("/{gameId}/finish")
@@ -73,9 +69,7 @@ public class GameController {
     }
 
     @GetMapping("/leaderboard")
-    public ResponseEntity<?> getLeaderboard() {
-        List<LeaderboardEntry> leaderboard = gameService.getLeaderboard();
-        return ResponseEntity.ok(leaderboard);
+    public ResponseEntity<List<?>> getLeaderboard() {
+        return ResponseEntity.ok(gameService.getLeaderboard());
     }
-
 }
