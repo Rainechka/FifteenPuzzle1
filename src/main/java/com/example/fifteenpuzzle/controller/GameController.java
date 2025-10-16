@@ -67,9 +67,4 @@ public class GameController {
         gameService.saveResult(request.getPlayerName(), gameId);
         return ResponseEntity.ok(Map.of("message", "Результат сохранён"));
     }
-
-    @GetMapping("/leaderboard")
-    public ResponseEntity<List<?>> getLeaderboard() {
-        return ResponseEntity.ok(gameService.getLeaderboard());
-    }
 }

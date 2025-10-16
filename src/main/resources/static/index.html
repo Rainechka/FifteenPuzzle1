@@ -5,22 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Пятнашки — REST API</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
             font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 30px 20px;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
-            background-color: #f9f9f9;
+        }
+        .game-header {
+            text-align: center;
+            margin-bottom: 10px;
         }
         h1 {
             color: #2c3e50;
+            margin: 0 0 8px 0;
+        }
+        #timer {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 0;
         }
         .controls {
             margin: 15px 0;
             display: flex;
             gap: 10px;
             align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
         }
         button {
             padding: 8px 16px;
@@ -31,12 +49,29 @@
             background: white;
         }
         button:hover {
-            background: #fa423c; /* твой цвет */
+            background: #fa423c;
+        }
+        .board-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            margin: 10px 0;
         }
         .board {
             display: grid;
             gap: 4px;
-            margin-top: 20px;
+        }
+        .leaderboard-panel {
+            position: absolute;
+            left: 100%;
+            top: 0;
+            margin-left: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 300px;
+            width: 280px;
         }
         .tile {
             width: 60px;
@@ -58,27 +93,53 @@
             cursor: not-allowed;
         }
         .message {
-            margin-top: 15px;
+            margin: 15px 0;
             font-weight: bold;
             color: #d32f2f;
-        }
-        .win {
-            color: #388e3c;
-        }
-        #leaderboard h2, #leaderboard h3 {
+            min-height: 24px;
             text-align: center;
         }
-        #leaderboard ol {
-            padding-left: 20px;
-            max-width: 300px;
+        .leaderboard-panel h2 {
+            text-align: center;
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 18px;
         }
-        #leaderboard li {
+        .leaderboard-panel h3 {
+            margin: 12px 0 6px 0;
+            color: #3498db;
+            font-size: 15px;
+        }
+        .leaderboard-panel ol {
+            padding-left: 20px;
+            margin: 0;
+        }
+        .leaderboard-panel li {
             margin-bottom: 5px;
+        }
+        .leaderboard-panel p {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 900px) {
+            .leaderboard-panel {
+                position: static;
+                margin: 20px auto 0;
+                margin-left: 0;
+                max-width: 500px;
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
-<h1>Игра «Пятнашки»</h1>
+<div class="game-header">
+    <h1>Игра «Пятнашки»</h1>
+    <div id="timer">Время: 0 сек</div>
+</div>
 
 <div class="controls">
     <label for="size">Размер:</label>
@@ -87,16 +148,20 @@
         <option value="4" selected>4×4</option>
         <option value="5">5×5</option>
     </select>
-    <button id="resetBtn">Сбросить игру</button>
+    <button id="resetBtn">Сбросить</button>
 </div>
 
-<div id="timer">Время: 0 сек</div>
-<div id="board" class="board"></div>
+<div class="board-container">
+    <div id="board" class="board"></div>
+    <div class="leaderboard-panel">
+        <h2>🏆 Таблица рекордов</h2>
+        <div id="leaderboard-content">
+            <p>Загрузка...</p>
+        </div>
+    </div>
+</div>
+
 <div id="message" class="message"></div>
-
-<div id="leaderboard">
-    <p>Загрузка рекордов...</p>
-</div>
 
 <script>
     const API_BASE = '/game/default';
@@ -105,7 +170,7 @@
     const sizeSelect = document.getElementById('size');
     const resetBtn = document.getElementById('resetBtn');
     const timerEl = document.getElementById('timer');
-    const leaderboardEl = document.getElementById('leaderboard');
+    const leaderboardContent = document.getElementById('leaderboard-content');
 
     let clientTimer = 0;
     let timerInterval = null;
@@ -239,18 +304,17 @@
     }
 
     async function loadLeaderboard() {
-        leaderboardEl.innerHTML = '<p>Загрузка рекордов...</p>';
+        leaderboardContent.innerHTML = '<p>Загрузка...</p>';
         try {
             const response = await fetch('/leaderboard');
             if (!response.ok) throw new Error('HTTP ' + response.status);
             const records = await response.json();
-            console.log('Рекорды с сервера:', records); // для отладки
 
             if (!Array.isArray(records)) {
-                throw new Error('Некорректный формат рекордов');
+                throw new Error('Некорректный формат');
             }
 
-            let html = '<h2>🏆 Таблица рекордов</h2>';
+            let html = '';
             [3, 4, 5].forEach(size => {
                 const sizeRecords = records
                     .filter(r => r.size === size)
@@ -267,14 +331,14 @@
                 }
             });
 
-            if (html === '<h2>🏆 Таблица рекордов</h2>') {
-                html += '<p>Пока нет рекордов</p>';
+            if (!html) {
+                html = '<p>Пока нет рекордов</p>';
             }
 
-            leaderboardEl.innerHTML = html;
+            leaderboardContent.innerHTML = html;
         } catch (e) {
             console.error('Ошибка загрузки рекордов:', e);
-            leaderboardEl.innerHTML = '<p>Не удалось загрузить рекорды</p>';
+            leaderboardContent.innerHTML = '<p>Не удалось загрузить</p>';
         }
     }
 
@@ -327,7 +391,7 @@
                 if (resp.ok) {
                     alert('Рекорд успешно сохранён!');
                     document.body.removeChild(overlay);
-                    loadLeaderboard(); // ✅ обновляем таблицу
+                    loadLeaderboard();
                     resetGame();
                 } else {
                     const err = await resp.json().catch(() => ({}));
