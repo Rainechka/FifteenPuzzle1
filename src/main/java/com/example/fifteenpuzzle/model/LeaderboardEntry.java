@@ -1,4 +1,3 @@
-// com.example.fifteenpuzzle.model.LeaderboardEntry.java
 package com.example.fifteenpuzzle.model;
 
 import com.fasterxml.jackson.annotation.JsonFormat;

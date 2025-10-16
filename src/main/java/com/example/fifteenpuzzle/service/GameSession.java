@@ -1,4 +1,3 @@
-// com.example.fifteenpuzzle.service.GameSession.java
 package com.example.fifteenpuzzle.service;
 
 import java.time.Instant;

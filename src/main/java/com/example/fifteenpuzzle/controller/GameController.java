@@ -1,13 +1,12 @@
 package com.example.fifteenpuzzle.controller;
 
-import com.example.fifteenpuzzle.model.GameBoard;
-import com.example.fifteenpuzzle.model.MoveRequest;
-import com.example.fifteenpuzzle.model.ResetRequest;
+import com.example.fifteenpuzzle.model.*;
 import com.example.fifteenpuzzle.service.GameService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -26,11 +25,14 @@ public class GameController {
             @Valid @RequestBody MoveRequest request) {
 
         GameService.MoveResult result = gameService.moveTile(gameId, request.getTileId());
+        long currentTime = gameService.getGameTime(gameId); // ← добавили
+
         return ResponseEntity.ok(Map.of(
                 "movable", result.isMovable(),
                 "board", result.getBoard(),
                 "solved", result.isSolved(),
-                "size", result.getSize()
+                "size", result.getSize(),
+                "timeSeconds", currentTime
         ));
     }
 
@@ -38,9 +40,11 @@ public class GameController {
     public ResponseEntity<?> getBoard(@PathVariable String gameId) {
         int[] board = gameService.getBoard(gameId);
         int size = gameService.getGameSize(gameId);
+        long time = gameService.getGameTime(gameId);
         return ResponseEntity.ok(Map.of(
                 "board", board,
-                "size", size
+                "size", size,
+                "timeSeconds", time
         ));
     }
 
@@ -59,4 +63,19 @@ public class GameController {
                 "size", board.getSize()
         ));
     }
+
+    @PostMapping("/{gameId}/finish")
+    public ResponseEntity<?> finishGame(
+            @PathVariable String gameId,
+            @Valid @RequestBody FinishRequest request) {
+        gameService.saveResult(request.getPlayerName(), gameId);
+        return ResponseEntity.ok(Map.of("message", "Результат сохранён"));
+    }
+
+    @GetMapping("/leaderboard")
+    public ResponseEntity<?> getLeaderboard() {
+        List<LeaderboardEntry> leaderboard = gameService.getLeaderboard();
+        return ResponseEntity.ok(leaderboard);
+    }
+
 }

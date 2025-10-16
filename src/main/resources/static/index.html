@@ -87,12 +87,76 @@
     const messageEl = document.getElementById('message');
     const sizeSelect = document.getElementById('size');
     const resetBtn = document.getElementById('resetBtn');
+    const timerEl = document.createElement('div');
+    timerEl.id = 'timer';
+    timerEl.style.marginTop = '10px';
+    timerEl.style.fontSize = '18px';
+    timerEl.style.fontWeight = 'bold';
+    document.body.insertBefore(timerEl, boardContainer);
+
+    let gameTime = 0;
+    let timerInterval = null;
+
+    function updateTimer(time) {
+        gameTime = time;
+        timerEl.textContent = `Время: ${time} сек`;
+    }
+
+    function startTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            updateTimer(++gameTime);
+        }, 1000);
+    }
+
+    // Загрузка рекордов
+    async function loadLeaderboard() {
+        try {
+            const response = await fetch('/leaderboard');
+            const records = await response.json();
+            displayLeaderboard(records);
+        } catch (e) {
+            console.warn('Не удалось загрузить рекорды');
+        }
+    }
+
+    function displayLeaderboard(records) {
+        const existing = document.getElementById('leaderboard');
+        if (existing) existing.remove();
+
+        const lbDiv = document.createElement('div');
+        lbDiv.id = 'leaderboard';
+        lbDiv.innerHTML = '<h2>🏆 Таблица рекордов</h2>';
+
+        [3,4,5].forEach(size => {
+            const sizeRecords = records.filter(r => r.size === size).slice(0,5);
+            if (sizeRecords.length > 0) {
+                const h3 = document.createElement('h3');
+                h3.textContent = `${size}×${size}`;
+                lbDiv.appendChild(h3);
+                const ul = document.createElement('ul');
+                ul.style.listStyle = 'none';
+                ul.style.padding = '0';
+                sizeRecords.forEach((r, i) => {
+                    const li = document.createElement('li');
+                    li.textContent = `${i+1}. ${r.playerName} — ${r.timeSeconds} сек`;
+                    ul.appendChild(li);
+                });
+                lbDiv.appendChild(ul);
+            }
+        });
+
+        document.body.appendChild(lbDiv);
+    }
 
     // Инициализация
     resetBtn.addEventListener('click', resetGame);
     loadBoard();
+    loadLeaderboard();
 
     async function resetGame() {
+        clearInterval(timerInterval);
+        timerInterval = null;
         const size = parseInt(sizeSelect.value);
         try {
             const response = await fetch(`${API_BASE}/reset`, {
@@ -103,25 +167,24 @@
             if (response.ok) {
                 messageEl.textContent = '';
                 messageEl.className = 'message';
+                updateTimer(0);
+                startTimer(); // таймер идёт сразу после сброса
                 loadBoard();
-            } else {
-                throw new Error('Ошибка сброса');
             }
         } catch (err) {
-            messageEl.textContent = 'Не удалось сбросить игру';
-            messageEl.className = 'message';
+            messageEl.textContent = 'Ошибка сброса';
         }
     }
 
     async function loadBoard() {
         try {
             const response = await fetch(`${API_BASE}/board`);
-            if (!response.ok) throw new Error('Не удалось загрузить доску');
             const data = await response.json();
             renderBoard(data.board, data.size);
+            updateTimer(data.timeSeconds || 0);
+            if (data.timeSeconds > 0) startTimer();
         } catch (err) {
-            messageEl.textContent = 'Ошибка загрузки доски';
-            messageEl.className = 'message';
+            messageEl.textContent = 'Ошибка загрузки';
         }
     }
 
@@ -134,11 +197,9 @@
             const button = document.createElement('button');
             button.className = value === 0 ? 'tile empty' : 'tile';
             button.textContent = value === 0 ? '' : value;
-
             if (value !== 0) {
                 button.addEventListener('click', () => moveTile(value));
             }
-
             boardContainer.appendChild(button);
         });
     }
@@ -150,26 +211,78 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tileId })
             });
-            if (!response.ok) throw new Error('Ошибка хода');
             const result = await response.json();
-
             renderBoard(result.board, result.size);
+            updateTimer(result.timeSeconds);
 
             if (result.solved) {
-                messageEl.textContent = '🎉 Поздравляем! Вы выиграли!';
-                messageEl.className = 'message win';
-                // Автоматический сброс через 2 секунды
-                setTimeout(resetGame, 2000);
+                clearInterval(timerInterval);
+                showWinDialog(result.timeSeconds);
             } else if (!result.movable) {
-                messageEl.textContent = 'Нельзя переместить эту плитку!';
+                messageEl.textContent = 'Нельзя переместить!';
                 messageEl.className = 'message';
             } else {
                 messageEl.textContent = '';
             }
         } catch (err) {
-            messageEl.textContent = 'Ошибка при перемещении';
-            messageEl.className = 'message';
+            messageEl.textContent = 'Ошибка хода';
         }
+    }
+
+    function showWinDialog(time) {
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(0,0,0,0.7)';
+        overlay.style.display = 'flex';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.zIndex = '1000';
+
+        const dialog = document.createElement('div');
+        dialog.style.backgroundColor = 'white';
+        dialog.style.padding = '20px';
+        dialog.style.borderRadius = '10px';
+        dialog.style.textAlign = 'center';
+        dialog.innerHTML = `
+            <h2>🎉 Победа!</h2>
+            <p>Время: ${time} секунд</p>
+            <input type="text" id="playerName" placeholder="Ваше имя (до 20 символов)" maxlength="20" />
+            <br><br>
+            <button id="saveRecordBtn">Сохранить рекорд</button>
+            <button id="closeWinBtn">Играть снова</button>
+        `;
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        document.getElementById('closeWinBtn').onclick = () => {
+            document.body.removeChild(overlay);
+            resetGame();
+        };
+
+        document.getElementById('saveRecordBtn').onclick = async () => {
+            const name = document.getElementById('playerName').value.trim();
+            if (!name) {
+                alert('Введите имя!');
+                return;
+            }
+            try {
+                await fetch(`${API_BASE}/finish`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ playerName: name })
+                });
+                alert('Рекорд сохранён!');
+                document.body.removeChild(overlay);
+                loadLeaderboard();
+                resetGame();
+            } catch (e) {
+                alert('Ошибка сохранения');
+            }
+        };
     }
 </script>
 </body>
